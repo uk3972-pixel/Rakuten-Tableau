@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RMS 楽天分析ダッシュボード</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --blue:#1462D4;--blue2:#0D3E8A;--blue-l:#EBF2FF;--blue-lt:#F0F5FF;
+  --border:#DDE3EE;--bg:#F4F6FB;
+  --text:#1A2340;--text2:#4B5874;--text3:#8696B5;
+  --green:#10B981;--red:#EF4444;--amber:#F59E0B;
+  --shadow:0 2px 8px rgba(20,98,212,.08);--shadow-sm:0 1px 3px rgba(20,98,212,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);font-size:13px;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#c5d0e6;border-radius:3px}
+#hdr{background:var(--blue2);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:200}
+.h-brand{display:flex;align-items:center;gap:12px}
+.h-logo{width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 0 0 2px rgba(255,255,255,.2)}
+.h-title{font-weight:700;font-size:14px;color:#fff;letter-spacing:.03em}
+.h-store{font-size:11px;color:rgba(255,255,255,.6);background:rgba(255,255,255,.15);padding:2px 9px;border-radius:3px}
+#hdr-range{font-size:11px;color:rgba(255,255,255,.5);font-family:'IBM Plex Mono',monospace;padding-right:4px}
+#tabs{background:#fff;border-bottom:1px solid var(--border);padding:0 24px;display:flex;position:sticky;top:52px;z-index:100;overflow-x:auto;white-space:nowrap;box-shadow:var(--shadow-sm)}
+.tab{padding:14px 16px;cursor:pointer;font-size:12px;color:var(--text3);border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;flex-shrink:0;font-weight:500}
+.tab:hover{color:var(--blue)}
+.tab.on{color:var(--blue);border-bottom-color:var(--blue);font-weight:700}
+.pg{display:none;padding:24px;max-width:1400px;margin:0 auto}
+.pg.on{display:block}
+.sec{background:#fff;border-radius:10px;padding:22px 24px;margin-bottom:16px;border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+.sec-title{font-size:13px;font-weight:700;color:var(--text);padding-left:12px;border-left:4px solid var(--blue);margin-bottom:4px;line-height:1.4}
+.sec-sub{font-size:11px;color:var(--text3);margin-bottom:16px;padding-left:12px}
+.row{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.col1{flex:1;min-width:200px}.col2{flex:2;min-width:300px}.col3{flex:3;min-width:400px}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:960px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:#fff;border-radius:10px;padding:18px 20px;border:1px solid var(--border);border-top:3px solid var(--blue);box-shadow:var(--shadow-sm);position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;right:0;width:56px;height:56px;background:var(--blue-l);border-radius:0 0 0 56px}
+.kpi-lbl{font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px}
+.kpi-val{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;color:var(--text);line-height:1;letter-spacing:-.01em}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:5px}
+.ctrl{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.ctrl label{font-size:12px;color:var(--text2);font-weight:500}
+.ctrl select{border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;font-family:inherit;background:#fff;cursor:pointer;color:var(--text)}
+.ctrl select:focus{outline:none;border-color:var(--blue)}
+.ctrl-group{display:flex;align-items:center;gap:6px}
+.tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border)}
+.dtbl{width:100%;border-collapse:collapse;font-size:12px}
+.dtbl thead th{background:var(--blue);color:#fff;padding:10px 14px;text-align:left;font-weight:600;white-space:nowrap;font-size:11px;letter-spacing:.03em}
+.dtbl thead th.r{text-align:right}
+.dtbl tbody tr{transition:background .1s}
+.dtbl tbody tr:hover{background:var(--blue-lt)}
+.dtbl tbody tr:nth-child(even){background:#F7F9FD}
+.dtbl tbody td{padding:9px 14px;border-bottom:1px solid #EDF0F7;vertical-align:middle;white-space:nowrap;color:var(--text)}
+.dtbl tbody td.r{text-align:right}
+.dtbl tbody td.mono{font-family:'IBM Plex Mono',monospace;font-size:11px}
+.dtbl tbody td.c-blue{color:var(--blue);font-weight:700}
+.dtbl tbody td.c-grn{color:var(--green);font-weight:700}
+.dtbl tbody td.c-red{color:var(--red);font-weight:700}
+.y2023{color:#F59E0B}.y2024{color:#EF4444}.y2025{color:#1462D4}.y2026{color:#10B981}
+.yoy-up{color:var(--green);font-size:11px;font-weight:700}
+.yoy-dn{color:var(--red);font-size:11px;font-weight:700}
+.yoy-nt{color:var(--text3);font-size:11px}
+#dz{border:2px dashed var(--border);border-radius:10px;padding:32px 20px;text-align:center;cursor:pointer;background:#FAFBFF;margin-bottom:12px;transition:all .2s}
+#dz:hover,#dz.ov{border-color:var(--blue);background:var(--blue-l)}
+#dz.ok{border-color:var(--green);background:#F0FDF4}
+.dz-ico{font-size:28px;margin-bottom:10px}
+.dz-ttl{font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px}
+.dz-sub{font-size:11px;color:var(--text3)}
+#sheet-tabs{display:flex;flex-wrap:wrap;gap:5px;margin-top:12px}
+.stab{padding:4px 12px;border:1px solid var(--border);border-radius:20px;font-size:11px;cursor:pointer;background:#fff;color:var(--text2);transition:all .15s}
+.stab:hover{border-color:var(--blue);color:var(--blue)}
+.stab.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+.info{padding:10px 14px;border-radius:7px;font-size:11px;margin-top:10px;line-height:1.6}
+.info.blue{background:var(--blue-l);color:var(--blue2);border:1px solid #BFDBFE}
+.info.amber{background:#FFFBEB;color:#92400E;border:1px solid #FDE68A}
+.mb14{margin-bottom:14px}
+.gc23{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+.gc32{display:grid;grid-template-columns:3fr 2fr;gap:14px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:960px){.gc23,.gc32,.g2{grid-template-columns:1fr}}
+
+</style>
+</head>
+<body>
+<header id="hdr">
+  <div class="h-brand">
+    <div class="h-logo">📊</div>
+    <span class="h-title">RMS 楽天分析ダッシュボード</span>
+  </div>
+  <span id="hdr-range"></span>
+</header>
+
+<div id="tabs">
+  <div class="tab on" onclick="goTab(0)">月次KPI推移</div>
+  <div class="tab" onclick="goTab(1)">新規・既存分析</div>
+  <div class="tab" onclick="goTab(2)">参照元比較</div>
+  <div class="tab" onclick="goTab(3)">キーワード比較</div>
+  <div class="tab" onclick="goTab(4)">RPP〜全体感〜</div>
+  <div class="tab" onclick="goTab(5)">メルマガ分析</div>
+  <div class="tab" onclick="goTab(6)">LINE分析</div>
+  <div class="tab" onclick="goTab(7)">アフィリエイト</div>
+  <div class="tab" onclick="goTab(8)">データ読込</div>
+</div>
+
+<!-- PAGE 0: 月次KPI推移 -->
+<div class="pg on" id="pg0">
+  <div class="sec">
+    <div class="sec-title">月次 KPI 推移</div>
+    <div class="sec-sub">月次の売上及び前年同月比の成長率</div>
+    <div style="height:260px"><canvas id="c-rev"></canvas></div>
+  </div>
+  <div class="row">
+    <div class="sec col1"><div class="sec-title" style="color:#3b82f6">アクセス人数</div><div style="height:180px"><canvas id="c-acc"></canvas></div></div>
+    <div class="sec col1"><div class="sec-title" style="color:#10B981">転換率</div><div style="height:180px"><canvas id="c-cvr"></canvas></div></div>
+    <div class="sec col1"><div class="sec-title" style="color:#0e9980">客単価</div><div style="height:180px"><canvas id="c-aov"></canvas></div></div>
+  </div>
+</div>
+
+<!-- PAGE 1: 新規・既存 -->
+<div class="pg" id="pg1">
+  <div class="row">
+    <div class="col1">
+      <div class="sec" style="margin-bottom:14px">
+        <div class="sec-title">月別の新規購入人数</div>
+        <div style="height:200px"><canvas id="c-new"></canvas></div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">月別の既存購入人数</div>
+        <div style="height:200px"><canvas id="c-exist"></canvas></div>
+      </div>
+    </div>
+    <div class="col2 sec">
+      <div class="sec-title" style="margin-bottom:14px">新規既存比率（購入者）</div>
+      <div class="tbl-wrap"><table class="dtbl" id="tbl-ne"></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 2: 参照元比較 -->
+<div class="pg" id="pg2">
+  <div class="ctrl">
+    <div class="ctrl-group"><label>指定年</label><select id="ref-year" onchange="renderRef()"></select></div>
+    <div class="ctrl-group"><label>指定月</label><select id="ref-month" onchange="renderRef()"></select></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto;font-size:11px;color:#555">
+      <span style="display:inline-block;width:12px;height:12px;background:#3b82f6;border-radius:2px"></span>今年
+      <span style="display:inline-block;width:12px;height:12px;background:#F59E0B;border-radius:2px"></span>前年
+    </div>
+  </div>
+  <div class="row">
+    <div class="sec col2">
+      <div class="sec-title" id="ref-title">参照元比較</div>
+      <div class="sec-sub" id="ref-sub" style="margin-bottom:8px"></div>
+      <div style="height:520px"><canvas id="c-ref-bar"></canvas></div>
+    </div>
+    <div class="sec col1">
+      <div class="sec-title">参照元推移</div>
+      <div style="height:280px"><canvas id="c-ref-trend"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 3: キーワード比較 -->
+<div class="pg" id="pg3">
+  <div class="ctrl">
+    <div class="ctrl-group"><label>指定年</label><select id="kw-year" onchange="renderKw()"></select></div>
+    <div class="ctrl-group"><label>指定月</label><select id="kw-month" onchange="renderKw()"></select></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto;font-size:11px;color:#555">
+      <span style="display:inline-block;width:12px;height:12px;background:#3b82f6;border-radius:2px"></span>今年
+      <span style="display:inline-block;width:12px;height:12px;background:#F59E0B;border-radius:2px"></span>前年
+    </div>
+  </div>
+  <div class="row">
+    <div class="sec col2">
+      <div class="sec-title">キーワード比較</div>
+      <div class="sec-sub" id="kw-sub" style="margin-bottom:8px"></div>
+      <div style="height:680px"><canvas id="c-kw-bar"></canvas></div>
+    </div>
+    <div class="sec col1">
+      <div class="sec-title">検索キーワード推移</div>
+      <div style="height:320px"><canvas id="c-kw-trend"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 4: RPP全体感 -->
+<div class="pg" id="pg4">
+  <div class="ctrl">
+    <label>グラフの年月</label>
+    <select id="rpp-year" onchange="renderRpp()"><option value="all">（すべて）</option></select>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+    <div class="sec"><div class="sec-title" style="font-size:12px">RPPの売上</div><div style="height:140px"><canvas id="rpp-rev"></canvas></div></div>
+    <div class="sec"><div class="sec-title" style="font-size:12px">RPP ROASの推移</div><div style="height:140px"><canvas id="rpp-roas"></canvas></div></div>
+    <div class="sec"><div class="sec-title" style="font-size:12px">RPPの広告費</div><div style="height:140px"><canvas id="rpp-cost"></canvas></div></div>
+    <div class="sec"><div class="sec-title" style="font-size:12px">消化率の推移</div><div style="height:140px"><canvas id="rpp-shouka"></canvas></div></div>
+    <div class="sec"><div class="sec-title" style="font-size:12px">RPPのCTR</div><div style="height:140px"><canvas id="rpp-ctr"></canvas></div></div>
+    <div class="sec"><div class="sec-title" style="font-size:12px">クリック数の推移</div><div style="height:140px"><canvas id="rpp-click"></canvas></div></div>
+    <div class="sec"><div class="sec-title" style="font-size:12px">RPPのCVR</div><div style="height:140px"><canvas id="rpp-cvr"></canvas></div></div>
+    <div class="sec"><div class="sec-title" style="font-size:12px">RPPのCPC推移</div><div style="height:140px"><canvas id="rpp-cpc"></canvas></div></div>
+  </div>
+  <div class="sec" style="margin-top:14px">
+    <div class="sec-title">RPP 月次データ</div>
+    <div class="tbl-wrap" style="margin-top:12px">
+      <table class="dtbl"><thead><tr><th>年月</th><th class="r">有効予算</th><th class="r">実績額</th><th class="r">消化率%</th><th class="r">ROAS%</th><th class="r">CVR%</th><th class="r">CPC円</th><th class="r">売上(720h)</th><th class="r">獲得単価</th></tr></thead>
+      <tbody id="tbl-rpp"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 5: メルマガ -->
+<div class="pg" id="pg5">
+  <div class="sec">
+    <div class="sec-title">メルマガ分析〜全体感〜</div>
+    <div class="row" style="margin-top:14px;margin-bottom:0">
+      <div class="col1"><div style="height:180px"><canvas id="c-mail-rev"></canvas></div></div>
+      <div class="col1"><div style="height:180px"><canvas id="c-mail-open"></canvas></div></div>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="tbl-wrap">
+      <table class="dtbl">
+        <thead><tr><th>年月</th><th class="r">売上</th><th class="r">配信回数</th><th class="r">保有数</th><th class="r">送信数</th><th class="r">開封率%</th><th class="r">送客数</th><th class="r">転換数</th></tr></thead>
+        <tbody id="tbl-mail"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 6: LINE -->
+<div class="pg" id="pg6">
+  <div class="sec">
+    <div class="sec-title">LINE効果の推移</div>
+    <div class="row" style="margin-top:14px;margin-bottom:0">
+      <div class="col1"><div style="height:180px"><canvas id="c-line-rev"></canvas></div></div>
+      <div class="col1"><div style="height:180px"><canvas id="c-line-cvr"></canvas></div></div>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="sec-title">LINE分析〜全体感〜</div>
+    <div class="tbl-wrap" style="margin-top:12px">
+      <table class="dtbl">
+        <thead><tr><th>月</th><th class="r">訪問者数</th><th class="r">転換数</th><th class="r">転換率%</th><th class="r">売上</th></tr></thead>
+        <tbody id="tbl-line"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 7: アフィリエイト -->
+<div class="pg" id="pg7">
+  <div class="sec">
+    <div class="sec-title">アフィリエイト経由 クリック数・売上推移</div>
+    <div style="height:260px"><canvas id="c-aff"></canvas></div>
+  </div>
+  <div class="sec">
+    <div class="tbl-wrap">
+      <table class="dtbl">
+        <thead><tr><th>年月</th><th class="r">クリック数</th><th class="r">前年比</th><th class="r">売上件数</th><th class="r">売上金額</th><th class="r">成果報酬</th></tr></thead>
+        <tbody id="tbl-aff"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 8: データ読込 -->
+<div class="pg" id="pg8">
+  <div class="row">
+    <div class="sec col1">
+      <div class="sec-title">XLSXファイル読み込み</div>
+      <div class="sec-sub">対象のXLSXファイルを読み込むとグラフ・表が更新されます</div>
+      <div id="dz" onclick="document.getElementById('xl-inp2').click()">
+        <div class="dz-ico" id="dz-ico">📂</div>
+        <div class="dz-ttl" id="dz-ttl">XLSXファイルをドロップ</div>
+        <div class="dz-sub" id="dz-sub">またはクリックして選択</div>
+      </div>
+      <input type="file" id="xl-inp2" accept=".xlsx" style="display:none" onchange="loadXL(this.files[0])">
+      <div class="info blue" style="margin-top:10px">読込中: <strong id="xl-file">ファイル未読み込み</strong></div>
+      <div id="sheet-tabs"></div>
+    </div>
+    <div class="sec col1">
+      <div class="sec-title">データ概要</div>
+      <table class="dtbl" style="margin-top:12px"><thead><tr><th>シート</th><th class="r">件数</th></tr></thead><tbody id="tbl-sum"></tbody></table>
+      <div class="info amber" style="margin-top:12px">対応シート: 売上+主要KPI / 新規_既存の売上 / 参照元 / キーワード / RPP全体 / メルマガ / LINE全体 / アフィリエイト_パートナー別</div>
+    </div>
+  </div>
+  <div class="sec" id="prev-sec" style="display:none">
+    <div class="sec-title" id="prev-title"></div>
+    <div class="tbl-wrap" style="margin-top:12px"><table class="dtbl"><thead><tr id="prev-head"></tr></thead><tbody id="prev-body"></tbody></table></div>
+  </div>
+</div>
+
+<script>
+const D={
+  "kpi":[],"rpp":[],"affiliate":[],"mail":[],"line":[],"newExisting":[],
+  "topRefs":[],"refByMonth":{},"refMonthlyTotal":{},"topKws":[],"kwByMonth":{},"kwMonthlyTotal":{}
+};
+
+/* ── utils ── */
+const fmt=n=>Math.round(n||0).toLocaleString('ja-JP');
+const fmtY=n=>'¥'+fmt(n);
+const fmtM=n=>'¥'+(+(n||0)/1000000).toFixed(1)+'M';
+const fmtP=(n,d=1)=>n!=null?(+n).toFixed(d)+'%':'—';
+
+/* ── Chart defaults ── */
+Chart.defaults.font.family="'Noto Sans JP',sans-serif";
+Chart.defaults.font.size=10;
+Chart.defaults.color='#8696B5';
+const GR={color:'#EDF0F7'};
+const TTP={
+  backgroundColor:'#1A2340',borderColor:'rgba(20,98,212,.3)',borderWidth:1,padding:12,
+  titleColor:'rgba(255,255,255,.6)',bodyColor:'#fff',
+  titleFont:{family:"'Noto Sans JP',sans-serif",size:10},
+  bodyFont:{family:"'IBM Plex Mono',monospace",size:11,weight:'600'},
+  displayColors:true,boxWidth:8,boxHeight:8,boxPadding:4,
+  cornerRadius:6,
+};
+const CHS={};
+function mk(id,cfg){if(CHS[id])CHS[id].destroy();try{CHS[id]=new Chart(document.getElementById(id).getContext('2d'),cfg);}catch(e){}}
+
+/* ── Color palette ── */
+const YC={'2023':'#F59E0B','2024':'#EF4444','2025':'#06B6D4','2026':'#10B981'};
+const MONTHS=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+/* ── helpers ── */
+function getYears(arr,dateKey='日付'){return[...new Set(arr.map(r=>r[dateKey].slice(0,4)))].sort();}
+function byYear(arr,dateKey='日付'){
+  const m={};
+  arr.forEach(r=>{const y=r[dateKey].slice(0,4);const mo=+r[dateKey].slice(5,7)-1;if(!m[y])m[y]=Array(12).fill(null);m[y][mo]=r;});
+  return m;
+}
+function yoyPct(cur,prev){if(!prev||!cur)return null;return(cur/prev*100).toFixed(1);}
+function allMonths(){return D.kpi.map(r=>r['日付'].slice(0,7));}
+
+/* ── Combo Chart (bar+line YoY) helper ── */
+function comboChart(id,labels,vals,yoyArr,barColor,label,yFmt,yoyFmt){
+  mk(id,{
+    type:'bar',
+    data:{labels,datasets:[
+      {type:'bar',label,data:vals,backgroundColor:barColor+'cc',borderRadius:3,yAxisID:'y1',order:2},
+      {type:'line',label:'前年比%',data:yoyArr,borderColor:'#F59E0B',borderWidth:2,pointRadius:4,pointBackgroundColor:'#F59E0B',fill:false,tension:.2,yAxisID:'y2',order:1},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...TTP,callbacks:{label:ctx=>ctx.datasetIndex===0?` ${label}：${yFmt(ctx.parsed.y)}`:`前年比：${ctx.parsed.y}%`}},
+        datalabels:false},
+      scales:{
+        x:{grid:{display:false},ticks:{color:'#8696B5',maxRotation:45},border:{display:false}},
+        y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>yFmt(v)}},
+        y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#F59E0B',callback:v=>v+'%'}},
+      }
+    }
+  });
+  // 値ラベルを描画
+  // (done via datalabels plugin alternative - inline)
+}
+
+/* ── YoY calculation ── */
+function calcYoY(arr,dateKey,valKey){
+  const map={};arr.forEach(r=>map[r[dateKey]]=r[valKey]);
+  return arr.map(r=>{
+    const prev=new Date(r[dateKey]);prev.setFullYear(prev.getFullYear()-1);
+    const pk=prev.toISOString().slice(0,7)+'-01';
+    const pv=map[pk];const cv=r[valKey];
+    return pv&&cv?(cv/pv*100).toFixed(1):null;
+  });
+}
+
+/* ═══ PAGE 0: 月次KPI推移 ═══ */
+function renderP0(){
+  const kpi=D.kpi;
+  const labels=kpi.map(r=>{const d=r['日付'];return d.slice(0,4)+'年'+parseInt(d.slice(5,7))+'月';});
+  const revYoY=calcYoY(kpi,'日付','売上金額');
+  const accYoY=calcYoY(kpi,'日付','アクセス人数');
+  const cvrYoY=calcYoY(kpi,'日付','転換率');
+  const aovYoY=calcYoY(kpi,'日付','客単価');
+
+  // Main revenue chart
+  mk('c-rev',{type:'bar',data:{labels,datasets:[
+    {type:'bar',label:'売上金額',data:kpi.map(r=>r['売上金額']),backgroundColor:'#1462D4cc',borderRadius:4,yAxisID:'y1',order:2},
+    {type:'line',label:'前年比%',data:revYoY,borderColor:'#F59E0B',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#F59E0B',fill:false,tension:.2,yAxisID:'y2',order:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{
+    legend:{display:true,position:'top',labels:{color:'#4B5874',boxWidth:12,boxHeight:8,padding:16,font:{size:11}}},
+    tooltip:{...TTP,callbacks:{label:ctx=>ctx.datasetIndex===0?` 売上：${fmtY(ctx.parsed.y)}`:`前年比：${ctx.parsed.y}%`}}},
+    scales:{x:{grid:{display:false},ticks:{color:'#4B5874',maxRotation:45,font:{size:10}},border:{display:false}},
+      y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>`¥${(v/1000000).toFixed(0)}M`}},
+      y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#F59E0B',callback:v=>v+'%'}},
+    }}});
+
+  // Access
+  mk('c-acc',{type:'bar',data:{labels,datasets:[
+    {type:'bar',data:kpi.map(r=>r['アクセス人数']),backgroundColor:'#60A5FAcc',borderRadius:2,yAxisID:'y1',order:2},
+    {type:'line',data:accYoY,borderColor:'#F59E0B',borderWidth:2,pointRadius:3,pointBackgroundColor:'#F59E0B',fill:false,tension:.2,yAxisID:'y2',order:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TTP}},
+    scales:{x:{grid:{display:false},ticks:{color:'#8696B5',maxRotation:45,font:{size:9}},border:{display:false}},
+      y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>(v/1000).toFixed(0)+'K'}},
+      y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#F59E0B',callback:v=>v+'%'}},
+    }}});
+
+  // CVR
+  mk('c-cvr',{type:'bar',data:{labels,datasets:[
+    {type:'bar',data:kpi.map(r=>r['転換率']),backgroundColor:'#34D399bb',borderRadius:2,yAxisID:'y1',order:2},
+    {type:'line',data:cvrYoY,borderColor:'#059669',borderWidth:2,pointRadius:3,pointBackgroundColor:'#059669',fill:false,tension:.2,yAxisID:'y2',order:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TTP}},
+    scales:{x:{grid:{display:false},ticks:{color:'#8696B5',maxRotation:45,font:{size:9}},border:{display:false}},
+      y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>v.toFixed(1)+'%'}},
+      y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#059669',callback:v=>v+'%'}},
+    }}});
+
+  // AOV
+  mk('c-aov',{type:'bar',data:{labels,datasets:[
+    {type:'bar',data:kpi.map(r=>r['客単価']),backgroundColor:'#22D3EEbb',borderRadius:2,yAxisID:'y1',order:2},
+    {type:'line',data:aovYoY,borderColor:'#0d9488',borderWidth:2,pointRadius:3,pointBackgroundColor:'#0d9488',fill:false,tension:.2,yAxisID:'y2',order:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TTP}},
+    scales:{x:{grid:{display:false},ticks:{color:'#8696B5',maxRotation:45,font:{size:9}},border:{display:false}},
+      y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>'¥'+v.toLocaleString()}},
+      y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#0d9488',callback:v=>v+'%'}},
+    }}});
+}
+
+/* ═══ PAGE 1: 新規・既存 ═══ */
+function renderP1(){
+  // KPIから新規・既存購入者数
+  const kpi=D.kpi;
+  const byY=byYear(kpi);
+  const years=Object.keys(byY).sort();
+  const colors={'2023':'#F59E0B','2024':'#EF4444','2025':'#06B6D4','2026':'#10B981'};
+
+  function multiLine(id,keyFn,titleArr){
+    const ds=years.map(y=>({
+      label:y,data:Array.from({length:12},(_,i)=>{const r=byY[y]?.[i];return r?keyFn(r):null;}),
+      borderColor:colors[y],backgroundColor:colors[y]+'33',borderWidth:2,
+      pointRadius:3,fill:false,tension:.3,spanGaps:true,
+    }));
+    mk(id,{type:'line',data:{labels:MONTHS,datasets:ds},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:true,position:'right',labels:{color:'#4B5874',boxWidth:10,boxHeight:10,padding:10,font:{size:11},generateLabels:chart=>chart.data.datasets.map((ds,i)=>({text:ds.label,fillStyle:ds.borderColor,strokeStyle:ds.borderColor,lineWidth:2,index:i}))}},
+          tooltip:{...TTP}},
+        scales:{x:{grid:{display:false},ticks:{color:'#8696B5'},border:{display:false}},
+          y:{grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>v>=1000?(v/1000).toFixed(0)+'K':v}}
+        }}});
+  }
+  multiLine('c-new',r=>r['新規購入者数']);
+  multiLine('c-exist',r=>r['リピート購入者数']);
+
+  // Table
+  const tbl=document.getElementById('tbl-ne');
+  const neMap={};D.newExisting.forEach(r=>neMap[r['日付']]=r);
+  const rows=D.kpi.map(r=>{
+    const ne=neMap[r['日付']]||{};
+    const total=r['新規購入者数']+(r['リピート購入者数']||0);
+    const newPct=total>0?(r['新規購入者数']/total*100).toFixed(0)+'%':'—';
+    const repPct=total>0?((r['リピート購入者数']||0)/total*100).toFixed(0)+'%':'—';
+    return `<tr>
+      <td class="mono">${r['日付'].slice(0,7).replace('-','年')}月</td>
+      <td class="r mono">${fmt(total)}</td>
+      <td class="r mono">${fmt(r['新規購入者数'])}</td>
+      <td class="r mono">${fmt(r['リピート購入者数']||0)}</td>
+      <td class="r">${newPct}</td>
+      <td class="r">${repPct}</td>
+    </tr>`;
+  }).join('');
+  tbl.innerHTML=`<thead><tr><th>年月</th><th class="r">購入者合計</th><th class="r">新規購入者数</th><th class="r">リピート購入...</th><th class="r">購入者に対...</th><th class="r">リピート購...</th></tr></thead><tbody>${rows}</tbody>`;
+}
+
+/* ═══ PAGE 2: 参照元 ═══ */
+function initRefControls(){
+  const months=Object.keys(D.refByMonth).sort();
+  const years=[...new Set(months.map(m=>m.slice(0,4)))];
+  const mList=[...new Set(months.map(m=>parseInt(m.slice(5,7))))].sort((a,b)=>a-b);
+  const ySel=document.getElementById('ref-year');
+  const mSel=document.getElementById('ref-month');
+  ySel.innerHTML=years.map(y=>`<option value="${y}">${y}</option>`).join('');
+  ySel.value=years[years.length-1];
+  mSel.innerHTML=mList.map(m=>`<option value="${m}">${m}月</option>`).join('');
+  mSel.value=mList[mList.length-1];
+}
+function renderRef(){
+  const year=document.getElementById('ref-year').value;
+  const prevYear=String(+year-1);
+  const month=String(document.getElementById('ref-month').value).padStart(2,'0');
+  const curKey=`${year}-${month}-01`;
+  const prevKey=`${prevYear}-${month}-01`;
+  const cur=D.refByMonth[curKey]||{};
+  const prev=D.refByMonth[prevKey]||{};
+  const refs=D.topRefs;
+
+  document.getElementById('ref-title').textContent=`今年の${parseInt(month)}月と昨年の${parseInt(month)}月の比較`;
+  document.getElementById('ref-sub').textContent=`${year}年${parseInt(month)}月（青）vs ${prevYear}年${parseInt(month)}月（橙）`;
+
+  // 今年・前年を参照元ごとに縦2本並び（grouped horizontal bar）
+  // ラベルを「参照元名」にして、今年バーと前年バーを1セットで表示
+  const curVals=refs.map(r=>cur[r]||0);
+  const prevVals=refs.map(r=>prev[r]||0);
+
+  mk('c-ref-bar',{
+    type:'bar',
+    data:{
+      labels:refs,
+      datasets:[
+        {label:year+'年（今年）',data:curVals,backgroundColor:'#1462D4cc',borderRadius:[0,4,4,0],borderSkipped:'left',barPercentage:0.45,categoryPercentage:0.85},
+        {label:prevYear+'年（前年）',data:prevVals,backgroundColor:'#60A5FAcc',borderRadius:[0,4,4,0],borderSkipped:'left',barPercentage:0.45,categoryPercentage:0.85},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      indexAxis:'y',
+      plugins:{
+        legend:{display:true,position:'top',labels:{color:'#4B5874',boxWidth:12,boxHeight:12,padding:16,font:{size:11}}},
+        tooltip:{...TTP,callbacks:{label:ctx=>{
+          const v=ctx.parsed.x;const ref=refs[ctx.dataIndex];
+          const c=cur[ref]||0;const p=prev[ref]||0;
+          const yoy=p>0?` (前年比 ${(c/p*100).toFixed(0)}%)`:'';
+          return ctx.datasetIndex===0?` ${year}年：${v.toLocaleString()}人${yoy}`
+            :` ${prevYear}年：${v.toLocaleString()}人`;
+        }}}
+      },
+      scales:{
+        x:{grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>v>=10000?(v/10000).toFixed(0)+'万':v.toLocaleString()}},
+        y:{grid:{display:false},border:{display:false},ticks:{color:'#4B5874',font:{size:11}}},
+      }
+    }
+  });
+
+  // Trend chart（月次合計アクセス + 前年比ライン）
+  const trendMonths=Object.keys(D.refByMonth).sort();
+  const trendLabels=trendMonths.map(m=>{const d=new Date(m);return `${d.getFullYear()}年${d.getMonth()+1}月`;});
+  const trendVals=trendMonths.map(m=>Object.values(D.refByMonth[m]||{}).reduce((s,v)=>s+v,0));
+  const trendYoY=trendMonths.map((m,i)=>{
+    const py=new Date(m);py.setFullYear(py.getFullYear()-1);const pk=py.toISOString().slice(0,7)+'-01';
+    const pv=Object.values(D.refByMonth[pk]||{}).reduce((s,v)=>s+v,0);
+    return pv>0?(trendVals[i]/pv*100).toFixed(1):null;
+  });
+  mk('c-ref-trend',{type:'bar',data:{labels:trendLabels,datasets:[
+    {type:'bar',label:'アクセス人数',data:trendVals,backgroundColor:'rgba(20,98,212,.5)',borderRadius:4,yAxisID:'y1',order:2},
+    {type:'line',label:'前年比%',data:trendYoY,borderColor:'#F59E0B',borderWidth:2,pointRadius:4,pointBackgroundColor:'#F59E0B',fill:false,tension:.2,yAxisID:'y2',order:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{...TTP}},
+    scales:{x:{grid:{display:false},ticks:{color:'#8696B5',maxRotation:45,font:{size:9}},border:{display:false}},
+      y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>(v/10000).toFixed(0)+'万'}},
+      y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#F59E0B',callback:v=>v+'%'}},
+    }}});
+}
+
+/* ═══ PAGE 3: キーワード ═══ */
+function initKwControls(){
+  const months=Object.keys(D.kwByMonth).sort();
+  const years=[...new Set(months.map(m=>m.slice(0,4)))];
+  const mList=[...new Set(months.map(m=>parseInt(m.slice(5,7))))].sort((a,b)=>a-b);
+  const ySel=document.getElementById('kw-year');const mSel=document.getElementById('kw-month');
+  ySel.innerHTML=years.map(y=>`<option value="${y}">${y}</option>`).join('');
+  ySel.value=years[years.length-1];
+  mSel.innerHTML=mList.map(m=>`<option value="${m}">${m}月</option>`).join('');
+  mSel.value=mList[mList.length-1];
+}
+function renderKw(){
+  const year=document.getElementById('kw-year').value;
+  const prevYear=String(+year-1);
+  const month=String(document.getElementById('kw-month').value).padStart(2,'0');
+  const curKey=`${year}-${month}-01`;
+  const prevKey=`${prevYear}-${month}-01`;
+  const cur=D.kwByMonth[curKey]||{};
+  const prev=D.kwByMonth[prevKey]||{};
+
+  document.getElementById('kw-sub').textContent=`${year}年${parseInt(month)}月（青）vs ${prevYear}年${parseInt(month)}月（橙）`;
+
+  // 今年の上位キーワード30件、前年の実績を同じラベルで並べる
+  const curEntries=Object.entries(cur).sort((a,b)=>b[1]-a[1]).slice(0,30);
+  const labels=curEntries.map(([k])=>k);
+  const curVals=curEntries.map(([,v])=>v);
+  const prevVals=labels.map(k=>prev[k]||0);
+
+  mk('c-kw-bar',{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:year+'年（今年）',data:curVals,backgroundColor:'#1462D4cc',borderRadius:[0,4,4,0],borderSkipped:'left',barPercentage:0.45,categoryPercentage:0.85},
+        {label:prevYear+'年（前年）',data:prevVals,backgroundColor:'#60A5FAcc',borderRadius:[0,4,4,0],borderSkipped:'left',barPercentage:0.45,categoryPercentage:0.85},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      indexAxis:'y',
+      plugins:{
+        legend:{display:true,position:'top',labels:{color:'#4B5874',boxWidth:12,boxHeight:12,padding:16,font:{size:11}}},
+        tooltip:{...TTP,callbacks:{label:ctx=>{
+          const k=labels[ctx.dataIndex];
+          const c=cur[k]||0;const p=prev[k]||0;
+          const yoy=p>0?` (前年比 ${(c/p*100).toFixed(0)}%)`:'';
+          return ctx.datasetIndex===0?` ${year}年：${ctx.parsed.x.toLocaleString()}人${yoy}`
+            :` ${prevYear}年：${ctx.parsed.x.toLocaleString()}人`;
+        }}}
+      },
+      scales:{
+        x:{grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>v>=1000?(v/1000).toFixed(1)+'K':v}},
+        y:{grid:{display:false},border:{display:false},ticks:{color:'#4B5874',font:{size:10}}},
+      }
+    }
+  });
+
+  // Trend（月次合計キーワードアクセス＋前年比）
+  const trendMonths=Object.keys(D.kwMonthlyTotal).sort();
+  const trendLabels=trendMonths.map(m=>{const d=new Date(m);return `${d.getFullYear()}年${d.getMonth()+1}月`;});
+  const trendVals=trendMonths.map(m=>D.kwMonthlyTotal[m]||0);
+  const trendYoY=trendMonths.map((m,i)=>{
+    const py=new Date(m);py.setFullYear(py.getFullYear()-1);const pk=py.toISOString().slice(0,7)+'-01';
+    const pv=D.kwMonthlyTotal[pk]||0;
+    return pv>0?(trendVals[i]/pv*100).toFixed(1):null;
+  });
+  mk('c-kw-trend',{type:'bar',data:{labels:trendLabels,datasets:[
+    {type:'bar',label:'アクセス人数',data:trendVals,backgroundColor:'rgba(20,98,212,.5)',borderRadius:4,yAxisID:'y1',order:2},
+    {type:'line',label:'前年比%',data:trendYoY,borderColor:'#F59E0B',borderWidth:2,pointRadius:4,pointBackgroundColor:'#F59E0B',fill:false,tension:.2,yAxisID:'y2',order:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{...TTP}},
+    scales:{x:{grid:{display:false},ticks:{color:'#8696B5',maxRotation:45,font:{size:9}},border:{display:false}},
+      y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5'}},
+      y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#F59E0B',callback:v=>v+'%'}},
+    }}});
+}
+
+/* ═══ PAGE 4: RPP ═══ */
+function initRppYearSel(){
+  const years=[...new Set(D.rpp.map(r=>r['日付'].slice(0,4)))].sort();
+  const sel=document.getElementById('rpp-year');
+  sel.innerHTML='<option value="all">（すべて）</option>'+years.map(y=>`<option value="${y}">${y}</option>`).join('');
+}
+function renderRpp(){
+  const selYear=document.getElementById('rpp-year').value;
+  const byY={};
+  D.rpp.forEach(r=>{
+    const y=r['日付'].slice(0,4);const mo=+r['日付'].slice(5,7)-1;
+    if(!byY[y])byY[y]=Array(12).fill(null);byY[y][mo]=r;
+  });
+  const years=Object.keys(byY).sort();
+  const filtYears=selYear==='all'?years:[selYear];
+  const colors={'2023':'#F59E0B','2024':'#EF4444','2025':'#06B6D4','2026':'#10B981'};
+
+  function rppLine(id,key,fmt2,suffix=''){
+    const ds=filtYears.map(y=>({
+      label:y,data:Array.from({length:12},(_,i)=>{const r=byY[y]?.[i];return r?r[key]:null;}),
+      borderColor:colors[y]||'#999',backgroundColor:colors[y]+'33',
+      borderWidth:2,pointRadius:3,fill:false,tension:.3,spanGaps:true,
+    }));
+    mk(id,{type:'line',data:{labels:MONTHS,datasets:ds},options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,position:'bottom',labels:{color:'#4B5874',boxWidth:8,boxHeight:8,padding:8,font:{size:9}}},tooltip:{...TTP}},
+      scales:{x:{grid:{display:false},ticks:{color:'#8696B5',font:{size:9}},border:{display:false}},
+        y:{grid:GR,border:{display:false},ticks:{color:'#8696B5',font:{size:9},callback:v=>fmt2(v)+suffix}}
+      }}});
+  }
+  rppLine('rpp-rev','売上',v=>`¥${(v/1000000).toFixed(1)}M`);
+  rppLine('rpp-roas','ROAS',v=>v.toFixed(0),'%');
+  rppLine('rpp-cost','実績額',v=>`¥${(v/10000).toFixed(0)}万`);
+  rppLine('rpp-shouka','消化率',v=>v.toFixed(0),'%');
+  rppLine('rpp-ctr','CTR',v=>v.toFixed(2),'%');
+  rppLine('rpp-click','クリック数',v=>(v/1000).toFixed(0)+'K');
+  rppLine('rpp-cvr','CVR',v=>v.toFixed(2),'%');
+  rppLine('rpp-cpc','CPC',v=>'¥'+Math.round(v));
+
+  // Table
+  document.getElementById('tbl-rpp').innerHTML=D.rpp.map(r=>`<tr>
+    <td class="mono">${r['日付'].slice(0,7).replace('-','年')}月</td>
+    <td class="r mono">${fmtY(r['有効予算'])}</td>
+    <td class="r mono" style="color:#1462D4;font-weight:600">${fmtY(r['実績額'])}</td>
+    <td class="r mono">${r['消化率'].toFixed(1)}</td>
+    <td class="r mono" style="color:#10B981;font-weight:600">${r['ROAS'].toFixed(1)}</td>
+    <td class="r mono">${r['CVR'].toFixed(2)}</td>
+    <td class="r mono">${Math.round(r['CPC'])}</td>
+    <td class="r mono">${fmtY(r['売上'])}</td>
+    <td class="r mono">${fmtY(r['注文獲得単価'])}</td>
+  </tr>`).join('');
+}
+
+/* ═══ PAGE 5: メルマガ ═══ */
+function renderP5(){
+  const mail=D.mail.filter(r=>r['送信数']>0||r['売上']>0);
+  const labels=mail.map(r=>r['年月'].slice(0,7).replace('-','年')+'月');
+  mk('c-mail-rev',{type:'bar',data:{labels,datasets:[
+    {type:'bar',label:'売上',data:mail.map(r=>r['売上']),backgroundColor:'rgba(20,98,212,.6)',borderRadius:3,yAxisID:'y1',order:2},
+    {type:'line',label:'転換数',data:mail.map(r=>r['転換数']),borderColor:'#F59E0B',borderWidth:2,pointRadius:3,fill:false,tension:.2,yAxisID:'y2',order:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#4B5874',boxWidth:10,padding:10,font:{size:10}}},tooltip:{...TTP}},
+    scales:{x:{grid:{display:false},ticks:{color:'#8696B5',maxRotation:45,font:{size:9}},border:{display:false}},
+      y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>`¥${(v/10000).toFixed(0)}万`}},
+      y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#F59E0B',callback:v=>v}}
+    }}});
+  mk('c-mail-open',{type:'bar',data:{labels,datasets:[
+    {type:'bar',label:'送信数',data:mail.map(r=>r['送信数']),backgroundColor:'#a3e635bb',borderRadius:3,yAxisID:'y1',order:2},
+    {type:'line',label:'開封率%',data:mail.map(r=>r['開封率']),borderColor:'#F59E0B',borderWidth:2,pointRadius:3,fill:false,tension:.2,yAxisID:'y2',order:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#4B5874',boxWidth:10,padding:10,font:{size:10}}},tooltip:{...TTP}},
+    scales:{x:{grid:{display:false},ticks:{color:'#8696B5',maxRotation:45,font:{size:9}},border:{display:false}},
+      y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>(v/10000).toFixed(0)+'万'}},
+      y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#F59E0B',callback:v=>v+'%'}}
+    }}});
+  document.getElementById('tbl-mail').innerHTML=D.mail.map(r=>`<tr>
+    <td class="mono">${r['年月'].slice(0,7).replace('-','年')}月</td>
+    <td class="r mono" style="color:#1462D4;font-weight:600">${fmtY(r['売上'])}</td>
+    <td class="r mono">${r['配信回数']||0}回</td>
+    <td class="r mono">${fmt(r['保有数'])}</td>
+    <td class="r mono">${fmt(r['送信数'])}</td>
+    <td class="r mono" style="color:#F59E0B;font-weight:600">${r['開封率']?.toFixed(1)||'—'}%</td>
+    <td class="r mono">${fmt(r['送客数'])}</td>
+    <td class="r mono">${fmt(r['転換数'])}</td>
+  </tr>`).join('');
+}
+
+/* ═══ PAGE 6: LINE ═══ */
+function renderP6(){
+  const line=D.line;
+  const labels=line.map(r=>r['月'].slice(0,7).replace('-','年')+'月');
+  mk('c-line-rev',{type:'bar',data:{labels,datasets:[
+    {type:'bar',label:'売上',data:line.map(r=>r['売上']),backgroundColor:'#10B981bb',borderRadius:3,yAxisID:'y1',order:2},
+    {type:'line',label:'転換数',data:line.map(r=>r['転換数']),borderColor:'#8B5CF6',borderWidth:2,pointRadius:3,fill:false,tension:.2,yAxisID:'y2',order:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#4B5874',boxWidth:10,padding:10,font:{size:10}}},tooltip:{...TTP}},
+    scales:{x:{grid:{display:false},ticks:{color:'#8696B5',maxRotation:45,font:{size:9}},border:{display:false}},
+      y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>`¥${(v/10000).toFixed(0)}万`}},
+      y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#8B5CF6'}}
+    }}});
+  mk('c-line-cvr',{type:'line',data:{labels,datasets:[
+    {label:'転換率%',data:line.map(r=>r['転換率']),borderColor:'#8B5CF6',borderWidth:2,pointRadius:4,fill:true,backgroundColor:'rgba(139,92,246,.1)',tension:.3},
+    {label:'訪問者数',data:line.map(r=>r['訪問者数']),borderColor:'#3b82f6',borderWidth:2,pointRadius:3,fill:false,tension:.3,yAxisID:'y2'},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#4B5874',boxWidth:10,padding:10,font:{size:10}}},tooltip:{...TTP}},
+    scales:{x:{grid:{display:false},ticks:{color:'#8696B5',maxRotation:45,font:{size:9}},border:{display:false}},
+      y:{grid:GR,border:{display:false},ticks:{color:'#8B5CF6',callback:v=>v+'%'}},
+      y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#3b82f6'}}
+    }}});
+  document.getElementById('tbl-line').innerHTML=line.map(r=>`<tr>
+    <td class="mono">${r['月'].slice(0,7).replace('-','年')}月</td>
+    <td class="r mono">${fmt(r['訪問者数'])}</td>
+    <td class="r mono">${fmt(r['転換数'])}</td>
+    <td class="r mono" style="color:#8B5CF6;font-weight:600">${r['転換率'].toFixed(1)}%</td>
+    <td class="r mono" style="color:#10B981;font-weight:600">${fmtY(r['売上'])}</td>
+  </tr>`).join('');
+}
+
+/* ═══ PAGE 7: アフィリエイト ═══ */
+function renderP7(){
+  const aff=D.affiliate;
+  const labels=aff.map(r=>r['年月'].slice(0,7).replace('-','年')+'月');
+  // YoY
+  const yoy=aff.map((r,i)=>{
+    const py=new Date(r['年月']);py.setFullYear(py.getFullYear()-1);
+    const pk=py.toISOString().slice(0,7)+'-01';
+    const prev=aff.find(a=>a['年月']===pk);
+    return prev&&prev['クリック数']>0?(r['クリック数']/prev['クリック数']*100).toFixed(0)+'%':null;
+  });
+  mk('c-aff',{type:'bar',data:{labels,datasets:[
+    {type:'bar',label:'クリック数',data:aff.map(r=>r['クリック数']),backgroundColor:'rgba(20,98,212,.6)',borderRadius:3,yAxisID:'y1',order:2},
+    {type:'line',label:'前年比%',data:aff.map((r,i)=>{
+      const py=new Date(r['年月']);py.setFullYear(py.getFullYear()-1);
+      const pk=py.toISOString().slice(0,7)+'-01';
+      const prev=aff.find(a=>a['年月']===pk);
+      return prev&&prev['クリック数']>0?(r['クリック数']/prev['クリック数']*100).toFixed(1):null;
+    }),borderColor:'transparent',backgroundColor:'transparent',pointRadius:8,
+     pointBackgroundColor:'#3b82f6',pointBorderColor:'#3b82f6',showLine:false,fill:false,yAxisID:'y2',order:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#4B5874',boxWidth:10,padding:12,font:{size:11}}},tooltip:{...TTP}},
+    scales:{x:{grid:{display:false},ticks:{color:'#8696B5',maxRotation:45,font:{size:10}},border:{display:false}},
+      y1:{position:'left',grid:GR,border:{display:false},ticks:{color:'#8696B5',callback:v=>(v/1000).toFixed(0)+'K'}},
+      y2:{position:'right',grid:{display:false},border:{display:false},ticks:{color:'#3b82f6',callback:v=>v+'%'}},
+    }}});
+  document.getElementById('tbl-aff').innerHTML=aff.map((r,i)=>{
+    const py=new Date(r['年月']);py.setFullYear(py.getFullYear()-1);
+    const pk=py.toISOString().slice(0,7)+'-01';
+    const prev=aff.find(a=>a['年月']===pk);
+    const yoyPct=prev&&prev['クリック数']>0?(r['クリック数']/prev['クリック数']*100).toFixed(0)+'%':'—';
+    return `<tr>
+      <td class="mono">${r['年月'].slice(0,7).replace('-','年')}月</td>
+      <td class="r mono">${fmt(r['クリック数'])}</td>
+      <td class="r" style="color:#3b82f6;font-weight:600">${yoyPct}</td>
+      <td class="r mono">${fmt(r['売上件数'])}</td>
+      <td class="r mono" style="color:#1462D4;font-weight:600">${fmtY(r['売上金額'])}</td>
+      <td class="r mono">${fmtY(r['成果報酬'])}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ═══ PAGE 8: データ読込 ═══ */
+function renderP8(){
+  document.getElementById('tbl-sum').innerHTML=[
+    ['売上+主要KPI',D.kpi.length],['新規/既存売上',D.newExisting.length],
+    ['RPP全体',D.rpp.length],['メルマガ',D.mail.length],
+    ['LINE全体',D.line.length],['参照元（月数）',Object.keys(D.refByMonth).length],
+    ['キーワード（月数）',Object.keys(D.kwByMonth).length],['アフィリエイト',D.affiliate.length],
+  ].map(([n,c])=>`<tr><td>${n}</td><td class="r mono">${c}</td></tr>`).join('');
+  const rng=[D.kpi[0]?.['日付']?.slice(0,7),D.kpi[D.kpi.length-1]?.['日付']?.slice(0,7)].filter(Boolean);
+  document.getElementById('hdr-range').textContent=rng.join(' 〜 ');
+}
+
+/* ═══ XLSX Loader ═══ */
+let WB=null;
+function loadXL(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      WB=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      document.getElementById('xl-file').textContent=file.name;
+
+      const dz=document.getElementById('dz');
+      dz.className='ok';
+      document.getElementById('dz-ico').textContent='✅';
+      document.getElementById('dz-ttl').textContent=file.name;
+      document.getElementById('dz-sub').textContent=WB.SheetNames.length+'シート読み込み成功';
+      parseWB(WB);renderAll();renderSheetTabs();
+    }catch(err){
+      document.getElementById('dz').className='err';
+      document.getElementById('dz-ttl').textContent='読み込み失敗: '+err.message;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function parseWB(wb){
+  const N=wb.SheetNames;
+  function find(ks){return N.find(n=>ks.some(k=>n.includes(k)));}
+  function json(name){if(!name)return[];return XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:null});}
+  function fd(v){if(!v)return'';if(typeof v==='string')return v.slice(0,10);if(typeof v==='number'){const d=new Date(Math.round((v-25569)*86400*1000));return d.toISOString().slice(0,10);}return String(v).slice(0,10);}
+  // KPI
+  const kpiN=find(['売上+主要KPI','主要KPI']);
+  if(kpiN){const rows=json(kpiN).filter(r=>r['デバイス']==='すべて'||!r['デバイス']);
+    D.kpi=rows.map(r=>({'日付':fd(r['日付']),'売上金額':+r['売上金額']||0,'売上件数':+r['売上件数']||0,'アクセス人数':+r['アクセス人数']||0,'転換率':+r['転換率']||0,'客単価':+r['客単価']||0,'新規購入者数':+r['新規購入者数']||0,'リピート購入者数':+r['リピート購入者数']||0})).filter(r=>r['日付']&&r['売上金額']>0);}
+  // newExisting
+  const neN=find(['新規_既存','新規・既存']);
+  if(neN){D.newExisting=json(neN).map(r=>({'日付':fd(r['日付']||r['月']),'売上':+r['売上']||0,'新規':+r['新規']||0,'1回':+r['1回']||0,'2回':+r['2回']||0,'3回':+r['3回']||0,'4回以上':+r['4回以上']||0})).filter(r=>r['日付']&&r['売上']>0);}
+  // RPP
+  const rppN=find(['RPP全体']);
+  if(rppN){D.rpp=json(rppN).map(r=>({'日付':fd(r['日付']),'有効予算':+r['有効予算']||0,'実績額':+r['実績額(合計)']||0,'CTR':+r['CTR(%)']||0,'CPC':+r['CPC実績(合計)']||0,'クリック数':+r['クリック数(合計)']||0,'売上':+r['売上金額(合計720時間)']||0,'CVR':+r['CVR(合計720時間)(%)']||0,'ROAS':+r['ROAS(合計720時間)(%)']||0,'消化率':+r['消化率(%)']||0,'注文獲得単価':+r['注文獲得単価(合計720時間)']||0})).filter(r=>r['日付']);}
+  // Mail
+  const mailN=find(['メルマガ']);
+  if(mailN){D.mail=json(mailN).filter(r=>r['デバイス']==='全体'||!r['デバイス']).map(r=>({'年月':fd(r['年月']||r['月']),'保有数':+r['保有数']||0,'配信回数':+r['配信回数']||0,'送信数':+r['送信数']||0,'開封率':+r['開封率(%)']||0,'送客数':+r['送客数']||0,'転換数':+r['転換数']||0,'売上':+r['売上']||0})).filter(r=>r['年月']);}
+  // LINE
+  const lineN=find(['LINE全体']);
+  if(lineN){D.line=json(lineN).map(r=>({'月':fd(r['月']),'訪問者数':+r['訪問者数']||0,'転換率':+r['転換率']||0,'売上':+r['売上']||0,'転換数':+r['転換数']||0})).filter(r=>r['月']&&r['売上']>0);}
+  // Affiliate
+  const affN=find(['アフィリエイト_パートナー別']);
+  if(affN){
+    const rows=json(affN);
+    const m={};rows.forEach(r=>{if(!r['年月'])return;const k=fd(r['年月']);if(!m[k])m[k]={年月:k,クリック数:0,売上件数:0,売上金額:0,成果報酬:0};m[k].クリック数+=+r['クリック数']||0;m[k].売上件数+=+r['売上件数']||0;m[k].売上金額+=+r['売上金額']||0;m[k].成果報酬+=+r['成果報酬']||0;});
+    D.affiliate=Object.values(m).sort((a,b)=>a.年月.localeCompare(b.年月));
+  }
+  // 参照元
+  const refN=find(['参照元']);
+  if(refN){
+    const rows=json(refN).filter(r=>r['年月']&&r['参照元']&&r['アクセス人数']);
+    const rtot={};const rbm={};
+    rows.forEach(r=>{const m=fd(r['年月']).slice(0,7)+'-01';const ref=String(r['参照元']);const v=+r['アクセス人数']||0;rtot[ref]=(rtot[ref]||0)+v;if(!rbm[m])rbm[m]={};rbm[m][ref]=(rbm[m][ref]||0)+v;});
+    D.topRefs=Object.entries(rtot).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([k])=>k);
+    D.refByMonth=rbm;
+    D.refMonthlyTotal={};Object.entries(rbm).forEach(([m,v])=>D.refMonthlyTotal[m]=Object.values(v).reduce((s,x)=>s+x,0));
+  }
+  // キーワード
+  const kwN=find(['キーワード']);
+  if(kwN){
+    const rows=json(kwN).filter(r=>r['年月']&&r['検索キーワード']&&r['アクセス人数']);
+    const ktot={};const kbm={};const kmt={};
+    rows.forEach(r=>{const m=fd(r['年月']).slice(0,7)+'-01';const kw=String(r['検索キーワード']);const v=+r['アクセス人数']||0;ktot[kw]=(ktot[kw]||0)+v;if(!kbm[m])kbm[m]={};kbm[m][kw]=(kbm[m][kw]||0)+v;kmt[m]=(kmt[m]||0)+v;});
+    D.topKws=Object.entries(ktot).sort((a,b)=>b[1]-a[1]).slice(0,40).map(([k])=>k);
+    D.kwByMonth=kbm;D.kwMonthlyTotal=kmt;
+  }
+}
+
+function renderSheetTabs(){
+  if(!WB)return;
+  document.getElementById('sheet-tabs').innerHTML='<div style="font-size:11px;color:#999;width:100%;margin-bottom:4px">シートプレビュー：</div>'+WB.SheetNames.map(n=>`<button class="stab" onclick="previewSheet('${n.replace(/'/g,"\\'")}',this)">${n}</button>`).join('');
+}
+function previewSheet(n,btn){
+  document.querySelectorAll('.stab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+  const rows=XLSX.utils.sheet_to_json(WB.Sheets[n],{header:1,defval:''});
+  if(!rows.length)return;
+  document.getElementById('preview-title').textContent=`「${n}」プレビュー（先頭15行）`;
+  document.getElementById('prev-head').innerHTML=rows[0].map(h=>`<th>${h}</th>`).join('');
+  document.getElementById('prev-body').innerHTML=rows.slice(1,16).map(r=>`<tr>${rows[0].map((_,i)=>`<td class="mono" style="font-size:11px">${r[i]??''}</td>`).join('')}</tr>`).join('');
+  document.getElementById('prev-sec').style.display='block';
+}
+const dz=document.getElementById('dz');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('ov');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('ov'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('ov');const f=e.dataTransfer.files[0];if(f)loadXL(f);});
+
+/* ═══ TAB ROUTING ═══ */
+const RENDERS=[renderP0,renderP1,()=>{initRefControls();renderRef();},()=>{initKwControls();renderKw();},()=>{initRppYearSel();renderRpp();},renderP5,renderP6,renderP7,renderP8];
+let curPg=0;
+function goTab(i){
+  document.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('on',j===i));
+  document.querySelectorAll('.pg').forEach((p,j)=>p.classList.toggle('on',j===i));
+  curPg=i;
+  requestAnimationFrame(()=>{
+    if(isEmptyData()&&i!==8){showEmptyState();return;}
+    RENDERS[i]?.();
+  });
+}
+function renderAll(){
+  if(isEmptyData()&&curPg!==8){showEmptyState();return;}
+  RENDERS[curPg]?.();
+}
+
+/* ═══ INIT ═══ */
+
+/* ─ Empty state check ─ */
+function isEmptyData(){return !D.kpi||D.kpi.length===0;}
+function showEmptyState(){
+  const msg=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:320px;color:#999;gap:16px;text-align:center">
+    <div style="font-size:48px">📂</div>
+    <div style="font-size:15px;font-weight:700;color:#555">XLSXファイルを読み込んでください</div>
+    <div style="font-size:12px;color:#aaa">「データ読込」タブからファイルを選択してください</div>
+    <button onclick="goTab(8)" style="padding:10px 28px;background:#1462D4;color:#fff;border:none;border-radius:7px;font-size:13px;font-family:'Noto Sans JP',sans-serif;font-weight:700;cursor:pointer;margin-top:4px;box-shadow:0 4px 12px rgba(20,98,212,.3)">📂 データ読込へ</button>
+  </div>`;
+  document.querySelectorAll('.pg.on').forEach(p=>{
+    if(p.id!=='pg8') p.innerHTML='<div class="sec">'+msg+'</div>';
+  });
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  if(isEmptyData()){goTab(8);return;}
+  renderP0();renderP8();
+  // HDR range
+  const rng=[D.kpi[0]?.['日付']?.slice(0,7),D.kpi[D.kpi.length-1]?.['日付']?.slice(0,7)].filter(Boolean);
+  document.getElementById('hdr-range').textContent=rng.join(' 〜 ');
+});
+</script>
+</body>
+</html>
